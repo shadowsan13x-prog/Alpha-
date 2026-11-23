@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080a18">
+  <title>ALPHA NEBULA</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <main id="loginView" class="login-wrap">
+    <section class="login-card glass">
+      <div class="brand-mark">α</div>
+      <p class="eyebrow">CONTROL CENTER</p>
+      <h1>ALPHA <span>NEBULA</span></h1>
+      <p class="muted">بوابة التحكم وإدارة الجلسات المعزولة</p>
+      <form id="loginForm">
+        <label for="password">كلمة مرور اللوحة</label>
+        <input id="password" type="password" autocomplete="current-password" required placeholder="أدخل كلمة المرور">
+        <button class="primary full" type="submit">دخول إلى NEBULA ↗</button>
+      </form>
+      <p id="loginError" class="error"></p>
+      <div class="login-foot">PRIVATE ACCESS · ENCRYPTED SESSION</div>
+    </section>
+  </main>
+
+  <div id="appView" class="app hidden">
+    <header class="topbar glass">
+      <div class="brand">
+        <div class="brand-mark small">α</div>
+        <div>
+          <strong>ALPHA <span>NEBULA</span></strong>
+          <small>SESSION COMMAND CENTER</small>
+        </div>
+      </div>
+      <div class="top-actions">
+        <span class="live-dot"></span>
+        <span class="muted tiny">SYSTEM ONLINE</span>
+        <button id="logoutBtn" class="ghost">خروج</button>
+      </div>
+    </header>
+
+    <main id="homeView">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">WELCOME TO YOUR CONTROL SPACE</p>
+          <h1>إدارة <span>الجلسات</span></h1>
+          <p class="muted">كل جلسة تعمل بإعداداتها وبياناتها المستقلة.</p>
+        </div>
+        <div class="hero-orb"><span>α</span></div>
+      </section>
+
+      <section class="summary-grid">
+        <article class="metric glass">
+          <span>الجلسات النشطة</span>
+          <strong id="activeCount">0</strong>
+          <small>ACTIVE SESSIONS</small>
+        </article>
+        <article class="metric glass">
+          <span>إجمالي الرسائل</span>
+          <strong id="messageCount">0</strong>
+          <small>MESSAGES PROCESSED</small>
+        </article>
+        <article class="metric glass">
+          <span>الأوامر المنفذة</span>
+          <strong id="commandCount">0</strong>
+          <small>COMMANDS EXECUTED</small>
+        </article>
+        <article class="metric glass">
+          <span>وقت تشغيل اللوحة</span>
+          <strong id="panelUptime">--</strong>
+          <small>PANEL UPTIME</small>
+        </article>
+      </section>
+
+      <section class="section-head">
+        <div>
+          <p class="eyebrow">ISOLATED INSTANCES</p>
+          <h2>اختر الجلسة</h2>
+        </div>
+        <button id="refreshBtn" class="ghost">↻ تحديث</button>
+      </section>
+
+      <section id="sessionsGrid" class="sessions-grid"></section>
+      <footer>ALPHA NEBULA <span>◆</span> PRIVATE CONTROL SYSTEM</footer>
+    </main>
+
+    <main id="sessionView" class="hidden">
+      <section class="session-banner glass">
+        <div>
+          <button id="backHome" class="ghost back-button">← العودة للجلسات</button>
+          <p class="eyebrow">SESSION CONTROL SPACE</p>
+          <h1 id="sessionTitle">ALPHA-01</h1>
+          <p class="muted">إعدادات مستقلة لهذه الجلسة فقط.</p>
+        </div>
+        <div class="session-banner-status">
+          <span class="live-dot"></span>
+          <span id="sessionRunState">غير متصل</span>
+        </div>
+      </section>
+
+      <section class="section-head session-heading">
+        <div>
+          <p class="eyebrow">CONFIGURATION</p>
+          <h2>لوحة التحكم</h2>
+        </div>
+        <span id="selectedLabel" class="selected-pill">ALPHA-01</span>
+      </section>
+
+      <section class="settings-layout">
+        <aside class="side-menu glass">
+          <button class="tab active" data-tab="general">◈ نظرة عامة</button>
+          <button class="tab" data-tab="developers">♙ المطورون</button>
+          <button class="tab" data-tab="identity">✧ الهوية والكنيات</button>
+          <button class="tab" data-tab="prefix">⌘ البادئة</button>
+          <button class="tab" data-tab="custom">＋ الأوامر المخصصة</button>
+          <button class="tab" data-tab="login">⇧ تسجيل الدخول</button>
+          <button class="tab" data-tab="logs">≋ سجل النشاط</button>
+        </aside>
+
+        <div class="settings-panel glass">
+
+          <section class="tab-content active" id="tab-general">
+            <h3>نظرة عامة</h3>
+            <p class="muted">حالة الجلسة ومعلومات التشغيل.</p>
+            <div id="sessionOverview" class="overview"></div>
+            <div class="quick-actions">
+              <button class="primary" data-session-action="start">تشغيل الجلسة</button>
+              <button data-session-action="stop">إيقاف الجلسة</button>
+              <button data-session-action="restart">إعادة التشغيل</button>
+            </div>
+          </section>
+
+          <section class="tab-content" id="tab-developers">
+            <h3>إدارة المطورين</h3>
+            <p class="muted">معرفات مستقلة لهذه الجلسة. اترك الخانات غير المستخدمة فارغة.</p>
+            <form id="developerForm">
+              <div class="field-grid">
+                <label>Developer ID 01<input class="dev-id" inputmode="numeric" maxlength="25"></label>
+                <label>Developer ID 02<input class="dev-id" inputmode="numeric" maxlength="25"></label>
+                <label>Developer ID 03<input class="dev-id" inputmode="numeric" maxlength="25"></label>
+                <label>Developer ID 04<input class="dev-id" inputmode="numeric" maxlength="25"></label>
+              </div>
+              <button class="primary" type="submit">حفظ المطورين</button>
+            </form>
+          </section>
+
+          <section class="tab-content" id="tab-identity">
+            <h3>الهوية والكنيات</h3>
+            <form id="identityForm">
+              <div class="field-grid">
+                <label>اسم البوت<input id="botName" maxlength="80"></label>
+                <label>كنية البوت<input id="botNick" maxlength="80"></label>
+                <label>اسم المطور<input id="devName" maxlength="80"></label>
+                <label>كنية المطور<input id="devNick" maxlength="80"></label>
+              </div>
+              <label class="toggle-line">
+                <span>استرجاع كنية البوت تلقائيًا</span>
+                <input id="botGuard" type="checkbox">
+              </label>
+              <label class="toggle-line">
+                <span>استرجاع كنية المطور تلقائيًا</span>
+                <input id="devGuard" type="checkbox">
+              </label>
+              <button class="primary" type="submit">حفظ إعدادات الهوية</button>
+            </form>
+          </section>
+
+          <section class="tab-content" id="tab-prefix">
+            <h3>إعدادات البادئة</h3>
+            <p class="muted">حدد الرمز الذي يبدأ به تنفيذ الأوامر في هذه الجلسة.</p>
+            <form id="prefixForm">
+              <label>بادئة الأوامر
+                <input id="prefixInput" maxlength="5" required placeholder="!">
+              </label>
+              <label class="toggle-line">
+                <span>السماح بتنفيذ الأوامر دون بادئة</span>
+                <input id="freePrefix" type="checkbox">
+              </label>
+              <button class="primary" type="submit">حفظ البادئة</button>
+            </form>
+            <p class="hint">يتم حفظ البادئة في بيانات الجلسة المختارة فقط.</p>
+          </section>
+
+          <section class="tab-content" id="tab-custom">
+            <h3>إدارة الأوامر المخصصة</h3>
+            <p class="muted">أنشئ أمرًا يرد بنص، أو أمرًا ينفذ JavaScript داخل عملية البوت.</p>
+
+            <form id="customCommandForm" class="command-editor">
+              <label>اسم الأمر
+                <input id="customCommandName" maxlength="32" required placeholder="مثال: مرحبا">
+              </label>
+              <div class="field-grid">
+                <label>رد نصي
+                  <textarea id="customCommandReply" rows="4" maxlength="5000" placeholder="النص الذي سيرسله البوت"></textarea>
+                </label>
+                <label>JavaScript
+                  <textarea id="customCommandCode" rows="4" maxlength="5000" placeholder="return async ({ api, event }) => { ... }"></textarea>
+                </label>
+              </div>
+              <label class="toggle-line">
+                <span>تفعيل الأمر</span>
+                <input id="customCommandEnabled" type="checkbox" checked>
+              </label>
+              <div class="editor-actions">
+                <button class="primary" type="submit">حفظ الأمر</button>
+                <button id="clearCommandForm" type="button">تفريغ الحقول</button>
+              </div>
+            </form>
+
+            <p class="warning">تنبيه أمني: كود JavaScript المخصص ينفذ داخل عملية البوت بصلاحياتها. لا تضف كودًا من مصدر غير موثوق.</p>
+            <div class="list-heading">
+              <h4>الأوامر المسجلة</h4>
+              <button id="reloadCommands" class="ghost" type="button">تحديث</button>
+            </div>
+            <div id="customCommandsList" class="custom-list">
+              <p class="muted">جارٍ التحميل...</p>
+            </div>
+          </section>
+
+          <section class="tab-content" id="tab-login">
+            <h3>بيانات تسجيل الدخول</h3>
+            <p class="muted">أدخل appState بصيغة JSON أو Cookie Header خاصًا بحساب هذه الجلسة.</p>
+
+            <form id="appstateTextForm">
+              <label>لصق appState أو Cookie
+                <textarea id="appstateText" rows="7" spellcheck="false" placeholder='[{"key":"c_user","value":"..."},{"key":"xs","value":"..."}] أو c_user=...; xs=...'></textarea>
+              </label>
+              <button class="primary" type="submit">حفظ بيانات الدخول النصية</button>
+            </form>
+
+            <div class="upload-box">
+              <div class="upload-icon">⇧</div>
+              <strong>رفع ملف appState.json</strong>
+              <small id="appStateStatus">حالة الملف غير معروفة</small>
+              <form id="uploadForm">
+                <input id="appstateFile" type="file" accept=".json,application/json">
+                <button class="primary" type="submit">رفع ملف الجلسة</button>
+              </form>
+            </div>
+            <p class="warning">لا تشارك بيانات الدخول مع أي شخص. يجب إيقاف الجلسة قبل استبدال بياناتها. لا يتم نسخ بيانات جلسة إلى أخرى.</p>
+          </section>
+
+          <section class="tab-content" id="tab-logs">
+            <div class="logs-head">
+              <div>
+                <h3>سجل النشاط</h3>
+                <p class="muted">آخر رسائل العملية المختارة.</p>
+              </div>
+              <button id="logsRefresh" class="ghost">تحديث السجل</button>
+            </div>
+            <pre id="logsBox" class="logs-box">لا توجد سجلات بعد.</pre>
+          </section>
+
+        </div>
+      </section>
+      <footer>ALPHA NEBULA <span>◆</span> SESSION WORKSPACE</footer>
+    </main>
+  </div>
+
+  <nav id="dock" class="dock hidden" aria-label="التنقل">
+    <button class="dock-item active" data-tab="general"><span>◈</span><small>الرئيسية</small></button>
+    <button class="dock-item" data-tab="developers"><span>♙</span><small>المطورون</small></button>
+    <button class="dock-item" data-tab="prefix"><span>⌘</span><small>البادئة</small></button>
+    <button class="dock-item" data-tab="custom"><span>＋</span><small>الأوامر</small></button>
+    <button class="dock-item" data-tab="logs"><span>≋</span><small>السجل</small></button>
+  </nav>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "DEV_ID": "",
+  "DEV_IDS": [],
+  "BOT_NAME": "ALPHA",
+  "BOT_NICK": "ALPHA",
+  "DEV_NAME": "KAI",
+  "DEV_NICK": "KAI",
+  "NICK_GUARD_ENABLED": true,
+  "DEV_NICK_GUARD_ENABLED": true,
+  "AUTO_DOWNLOAD_ENABLED": false,
+  "FASTSAVER_API_KEY": ""
+}

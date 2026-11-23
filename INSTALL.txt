@@ -1,0 +1,14 @@
+ALPHA song command
+
+1) Extract this ZIP into the ALPHA project root (the folder that contains package.json).
+2) Run:
+   npm install yt-search @distube/ytdl-core fluent-ffmpeg ffmpeg-static
+3) Run:
+   node --check commands/song.js
+   npm test
+
+The ALPHA command loader automatically loads commands/song.js and its aliases.
+Usage examples:
+   !song Fairuz
+   !اغنية فيروز كيفك انت
+   !play artist - song

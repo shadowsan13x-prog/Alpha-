@@ -1,0 +1,17 @@
+node_modules
+.git
+config.json
+appState*.json
+data*.json
+bot-status*.json
+custom-commands*.json
+fca-config.json
+.env
+.env.*
+.telegram.env
+telegram-auth.json*
+shadow-stats.json
+.repeat-locks
+*.zip
+*backup*
+*.bak*
