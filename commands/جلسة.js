@@ -315,7 +315,13 @@ module.exports = async function sessionCommand(
 
     // Send the actual PNG bytes as an image attachment, never as a URL.
     return await api.sendMessage(
-      { attachment: png },
+      {
+        attachment: {
+          buffer: png,
+          filename: "ALPHA-SESSION.png",
+          contentType: "image/png"
+        }
+      },
       event.threadID
     );
   } catch (error) {

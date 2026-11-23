@@ -32,14 +32,17 @@ test("جلسة يرسل صورة PNG فعلية بتصميم DARK GLASS", async 
 
   assert.equal(sentThread, "group-1");
   assert.ok(sentMessage && typeof sentMessage === "object");
-  assert.ok(Buffer.isBuffer(sentMessage.attachment));
+  assert.ok(sentMessage.attachment);
+  assert.ok(Buffer.isBuffer(sentMessage.attachment.buffer));
+  assert.equal(sentMessage.attachment.filename, "ALPHA-SESSION.png");
+  assert.equal(sentMessage.attachment.contentType, "image/png");
 
   assert.deepEqual(
-    [...sentMessage.attachment.subarray(0, 8)],
+    [...sentMessage.attachment.buffer.subarray(0, 8)],
     [137, 80, 78, 71, 13, 10, 26, 10]
   );
 
-  assert.ok(sentMessage.attachment.length > 1000);
+  assert.ok(sentMessage.attachment.buffer.length > 1000);
 });
 
 test("مولّد الواجهة يضمّن بيانات الجلسة ويهرب النصوص", () => {
