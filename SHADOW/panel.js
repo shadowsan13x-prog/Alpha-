@@ -5,6 +5,7 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { normalizeDeveloperIds } = require("./developer-ids");
 const { spawn } = require("child_process");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -184,7 +185,7 @@ function getSessionState(id) {
       BOT_NICK: String(config.BOT_NICK || "ALPHA"),
       DEV_NAME: String(config.DEV_NAME || "KAI"),
       DEV_NICK: String(config.DEV_NICK || "KAI"),
-      DEV_IDS: Array.isArray(config.DEV_IDS) ? config.DEV_IDS.slice(0, 4) : [],
+      DEV_IDS: (Array.isArray(config.DEV_IDS) && config.DEV_IDS.length ? config.DEV_IDS : (config.DEV_ID ? [config.DEV_ID] : [])).slice(0, 4),
       NICK_GUARD_ENABLED: config.NICK_GUARD_ENABLED !== false,
       DEV_NICK_GUARD_ENABLED: config.DEV_NICK_GUARD_ENABLED !== false
     },
@@ -435,17 +436,8 @@ app.put("/api/session/:id/config", requireAuth, (req, res) => {
     const body = req.body || {};
 
     if (body.DEV_IDS !== undefined) {
-      if (!Array.isArray(body.DEV_IDS)) {
-        return res.status(400).json({ error: "قائمة المطورين غير صالحة." });
-      }
-
-      const devIds = [...new Set(body.DEV_IDS.map(v => String(v).trim()).filter(Boolean))];
-      if (devIds.length > 4 || devIds.some(id => !/^\\d{5,25}$/.test(id))) {
-        return res.status(400).json({ error: "أدخل أربعة IDs كحد أقصى، وكل ID يجب أن يكون رقميًا." });
-      }
-
-      current.DEV_IDS = devIds;
-      current.DEV_ID = devIds[0] || "";
+      current.DEV_IDS = normalizeDeveloperIds(body.DEV_IDS);
+      current.DEV_ID = current.DEV_IDS[0] || "";
     }
 
     const allowed = ["BOT_NAME", "BOT_NICK", "DEV_NAME", "DEV_NICK"];
