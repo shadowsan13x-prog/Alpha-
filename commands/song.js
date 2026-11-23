@@ -77,15 +77,42 @@ module.exports = async function songCommand(
 
   let ytSearch;
   let ytdl;
+  let audioQuality;
   let ffmpeg;
 
   try {
     ytSearch = require("yt-search");
-    ytdl = require("@distube/ytdl-core");
+    const ytdlModule = require("@distube/ytdl-core");
+    if (typeof ytdlModule.Ytdl !== "function") {
+      throw new Error("واجهة Ytdl غير متوفرة في المكتبة المثبتة.");
+    }
+    ytdl = new ytdlModule.Ytdl();
+    audioQuality = ytdlModule.Quality.HighestAudio;
     ffmpeg = require("fluent-ffmpeg");
 
-    const ffmpegPath = require("ffmpeg-static");
-    if (!ffmpegPath) throw new Error("لم يتم العثور على ملف FFmpeg الخاص بالنظام.");
+    const staticFfmpegPath = require("ffmpeg-static");
+    let ffmpegPath =
+      staticFfmpegPath && fs.existsSync(staticFfmpegPath)
+        ? staticFfmpegPath
+        : null;
+
+    if (!ffmpegPath) {
+      const { execFileSync } = require("child_process");
+      try {
+        ffmpegPath = execFileSync(
+          "sh",
+          ["-c", "command -v ffmpeg"],
+          { encoding: "utf8" }
+        ).trim();
+      } catch (_) {
+        ffmpegPath = null;
+      }
+    }
+
+    if (!ffmpegPath) {
+      throw new Error("FFmpeg غير مثبت أو غير متاح في بيئة التشغيل.");
+    }
+
     ffmpeg.setFfmpegPath(ffmpegPath);
   } catch (error) {
     return send(
@@ -147,9 +174,9 @@ module.exports = async function songCommand(
       };
 
       try {
-        stream = ytdl(video.url, {
-          filter: "audioonly",
-          quality: "highestaudio",
+        stream = ytdl.download(video.url, {
+          quality: audioQuality,
+          filter: { hasAudio: true, hasVideo: false },
           highWaterMark: 1 << 20
         });
 

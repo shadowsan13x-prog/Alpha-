@@ -5,7 +5,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ pkg-config \
-    librsvg2-bin fonts-noto-core \
+    ffmpeg librsvg2-bin fonts-noto-core \
     && command -v rsvg-convert \
     && rm -rf /var/lib/apt/lists/*
 
