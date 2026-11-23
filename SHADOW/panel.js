@@ -472,7 +472,7 @@ app.put("/api/session/:id/prefix", requireAuth, (req, res) => {
     const body = req.body || {};
     const prefix = String(body.prefix ?? "").trim();
 
-    if (!prefix || prefix.length > 5 || /\\s/.test(prefix)) {
+    if (!prefix || prefix.length > 5 || /\s/.test(prefix)) {
       return res.status(400).json({ error: "البادئة يجب أن تكون من حرف إلى خمسة أحرف دون مسافات." });
     }
 
