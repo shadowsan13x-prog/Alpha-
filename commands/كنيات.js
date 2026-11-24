@@ -48,16 +48,48 @@ function setNicknameAsync(api, nickname, threadID, userID) {
   });
 }
 
+async function verifyNicknames(api, threadID, members, nickname) {
+  const info = await getThreadInfoSafe(api, threadID, { priority: 1 });
+  const nicknames = info.nicknames || info.customNicknames || {};
+  const verified = [];
+  const unverified = [];
+
+  for (const uid of members) {
+    if (String(nicknames[uid] || "") === nickname) {
+      verified.push(String(uid));
+    } else {
+      unverified.push(String(uid));
+    }
+  }
+
+  return { verified, unverified };
+}
+
 function timerKey(threadID) {
   return "nik_" + threadID;
 }
 
-function getSkipped(config, BOT_ID) {
-  // Keep the bot and every configured developer outside group-wide nickname changes.
+function getSkipped(config, BOT_ID, data = {}) {
+  // Exclude active session developers, including developers added through dev.
+  const stored = Array.isArray(data?.developers)
+    ? data.developers
+    : Array.isArray(data?.developers?.list)
+      ? data.developers.list
+      : [];
+
+  const disabled = new Set(
+    (Array.isArray(data?.disabledDevelopers) ? data.disabledDevelopers : [])
+      .map(value => String(value || "").trim())
+      .filter(Boolean)
+  );
+
   const developers = [
     ...(Array.isArray(config?.DEV_IDS) ? config.DEV_IDS : []),
-    config?.DEV_ID
-  ].map(value => String(value || "")).filter(Boolean);
+    config?.DEV_ID,
+    ...stored
+  ].map(value => String(value || "").trim())
+    .filter(value => value && !disabled.has(value));
+
   return new Set([String(BOT_ID || ""), ...developers].filter(Boolean));
 }
 
@@ -70,7 +102,6 @@ function startProtection(api, threadID, nickname, loadData, automicTimers, confi
   }
 
   let busy = false;
-  const skip = getSkipped(config, BOT_ID);
 
   automicTimers[key] = setInterval(async () => {
     if (busy) return;
@@ -79,6 +110,7 @@ function startProtection(api, threadID, nickname, loadData, automicTimers, confi
     try {
       const info = await getThreadInfoSafe(api, threadID);
       const nicknames = info.nicknames || info.customNicknames || {};
+      const skip = getSkipped(config, BOT_ID, loadData() || {});
 
       for (const uid of (info.participantIDs || [])) {
         if (skip.has(String(uid))) continue;
@@ -167,7 +199,7 @@ module.exports = async (api, event, args, startTime, loadData, saveData, automic
     };
     saveData(data);
 
-    const skip = getSkipped(config, BOT_ID);
+    const skip = getSkipped(config, BOT_ID, data);
     members = participantIDs.filter(uid => !skip.has(uid));
 
     console.log(`[NICKNAME CACHE] Fresh member list saved for ${threadID}: ${participantIDs.length}`);
@@ -186,7 +218,7 @@ module.exports = async (api, event, args, startTime, loadData, saveData, automic
       age >= 0 &&
       age <= CACHE_MAX_AGE_MS
     ) {
-      const skip = getSkipped(config, BOT_ID);
+      const skip = getSkipped(config, BOT_ID, data);
       members = cachedIDs.filter(uid => !skip.has(uid));
 
       console.log(
@@ -229,21 +261,51 @@ module.exports = async (api, event, args, startTime, loadData, saveData, automic
     }
   }
 
+  let verification = null;
+  let verificationError = null;
+
+  if (members.length > 0) {
+    try {
+      verification = await verifyNicknames(api, threadID, members, nickname);
+
+      if (verification.unverified.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        verification = await verifyNicknames(api, threadID, members, nickname);
+      }
+    } catch (error) {
+      verificationError = error;
+      console.log("تعذر التحقق النهائي من الكنيات:", error?.message || error);
+    }
+  }
+
   startProtection(api, threadID, nickname, loadData, automicTimers, config, BOT_ID);
 
-  const completion = members.length === 0
-    ? "⚠️ لم يتم العثور على أعضاء متاحين لتغيير كنياتهم."
-    : changedCount === members.length
-      ? "✅ تم الانتهاء؛ تم تغيير جميع الكنيات بنجاح."
-      : `⚠️ انتهى التنفيذ: تم تغيير ${changedCount} من ${members.length} كنية.`;
+  let completion;
+
+  if (members.length === 0) {
+    completion = "⚠️ لم يتم العثور على أعضاء متاحين لتغيير كنياتهم.";
+  } else if (verificationError) {
+    completion =
+      `⚠️ وصل تأكيد من المكتبة لـ ${changedCount} من ${members.length} طلبًا، لكن تعذر التحقق من النتيجة الفعلية.`;
+  } else if (verification.verified.length === members.length) {
+    completion = "✅ تم التحقق: الكنية الجديدة ظاهرة لدى جميع الأعضاء المستهدفين.";
+  } else {
+    completion =
+      `⚠️ التحقق النهائي: الكنية الجديدة ظاهرة لدى ${verification.verified.length} من ${members.length} عضوًا.`;
+  }
+
   const failedText = failedMembers.length
-    ? `\n❌ تعذر تغيير ${failedMembers.length} عضو.\nالمعرّفات: ${failedMembers.slice(0, 15).join(", ")}${failedMembers.length > 15 ? " ..." : ""}`
+    ? `\n❌ تعذر تنفيذ طلب تغيير ${failedMembers.length} عضو.\nالمعرّفات: ${failedMembers.slice(0, 15).join(", ")}${failedMembers.length > 15 ? " ..." : ""}`
+    : "";
+
+  const unverifiedText = verification && verification.unverified.length
+    ? `\n⚠️ لم تظهر الكنية الجديدة لدى ${verification.unverified.length} عضو في الفحص النهائي.\nالمعرّفات: ${verification.unverified.slice(0, 15).join(", ")}${verification.unverified.length > 15 ? " ..." : ""}`
     : "";
 
   await api.sendMessage(
     `${completion}\n👥 عدد الأعضاء المستهدفين: ${members.length}` +
     `\n🔁 فحص واسترجاع الكنية المحفوظة كل 3 ثوانٍ.` +
-    `\n📝 الكنيات المحفوظة: [${nickname}]` + failedText,
+    `\n📝 الكنيات المحفوظة: [${nickname}]` + failedText + unverifiedText,
     threadID
   );
 };

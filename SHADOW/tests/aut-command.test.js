@@ -33,13 +33,13 @@ function makeArgs(rawText, values = []) {
   return args;
 }
 
-function run(api, timers, senderID, args, config = {}, event = {}) {
+function run(api, timers, senderID, args, config = {}, event = {}, access = {}, data = {}) {
   return aut(
     api,
     { threadID: "aut-test-group", messageID: "command-message", senderID, ...event },
     args,
     Date.now(),
-    () => ({ prefix: "!", developers: [] }),
+    () => ({ ...data, prefix: "!", developers: [] }),
     () => {},
     timers,
     config,
@@ -47,7 +47,7 @@ function run(api, timers, senderID, args, config = {}, event = {}) {
     {},
     "bot-account",
     [], [], {},
-    { isDeveloper: false }
+    access
   );
 }
 
@@ -111,7 +111,7 @@ test("Aut and its English shortcut are developer-only in public mode", () => {
   }
 });
 
-test("only the primary owner can stop all Aut tasks", async () => {
+test("every configured developer can stop all Aut tasks in the current session", async () => {
   const api = makeApi();
   const timers = {};
   const config = { DEV_ID: "111111", DEV_IDS: ["111111", "222222"] };
@@ -120,10 +120,6 @@ test("only the primary owner can stop all Aut tasks", async () => {
     assert.ok(timers[aut.stateKey("aut-test-group")]);
 
     await run(api, timers, "222222", makeArgs("off all", ["off", "all"]), config);
-    assert.ok(timers[aut.stateKey("aut-test-group")], "المطور الإضافي لا يستطيع إيقاف الجميع");
-    assert.match(api.sent.at(-1).message, /للمالك الأساسي فقط/);
-
-    await run(api, timers, "111111", makeArgs("off all", ["off", "all"]), config);
     assert.equal(timers[aut.stateKey("aut-test-group")], undefined);
     assert.match(api.sent.at(-1).message, /تم إيقاف 1 مهمة Aut/);
   } finally {
@@ -131,6 +127,65 @@ test("only the primary owner can stop all Aut tasks", async () => {
   }
 });
 
+
+
+test("Aut rejects disabled developers and respects explicit false access", async () => {
+  const api = makeApi();
+  const timers = {};
+  const config = {
+    DEV_ID: "111111",
+    DEV_IDS: ["111111"],
+    DEV_CONFIGURED_IDS: ["111111"]
+  };
+
+  try {
+    await run(
+      api, timers, "111111", makeArgs("رد آلي"), config, {},
+      {},
+      { developers: ["111111"], disabledDevelopers: ["111111"] }
+    );
+    assert.match(api.sent.at(-1).message, /للمطورين فقط/);
+    assert.equal(timers[aut.stateKey("aut-test-group")], undefined);
+
+    await run(
+      api, timers, "111111", makeArgs("رد آلي"), config, {},
+      { isDeveloper: false },
+      { developers: ["111111"] }
+    );
+    assert.match(api.sent.at(-1).message, /للمطورين فقط/);
+    assert.equal(timers[aut.stateKey("aut-test-group")], undefined);
+  } finally {
+    aut.stopAll(timers);
+  }
+});
+
+test("Aut session 2 has a separate state key and stopAll does not stop session 1", () => {
+  const timers = {};
+  const stopped = [];
+  const key1 = aut.stateKey("same-group", "1");
+  const key2 = aut.stateKey("same-group", "2");
+
+  timers[key1] = { stop() { stopped.push("1"); } };
+  timers[key2] = { stop() { stopped.push("2"); } };
+
+  assert.notEqual(key1, key2);
+  const previous = process.env.SHADOW_SESSION_ID;
+  process.env.SHADOW_SESSION_ID = "2";
+  try {
+    assert.equal(aut.stopAll(timers), 1);
+  } finally {
+    if (previous === undefined) delete process.env.SHADOW_SESSION_ID;
+    else process.env.SHADOW_SESSION_ID = previous;
+  }
+
+  assert.deepEqual(stopped, ["2"]);
+  assert.ok(timers[key1]);
+  assert.equal(timers[key2], undefined);
+});
+
+test("Aut maps unsupported session IDs to session 1", () => {
+  assert.equal(aut.stateKey("same-group", "3"), aut.stateKey("same-group", "1"));
+});
 
 test("Aut uses the requested 80-second check, 3-second typing, and 16-minute idle limit", () => {
   assert.equal(aut.constants.POLL_GAP_MS, 80_000);

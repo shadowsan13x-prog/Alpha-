@@ -4,9 +4,11 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ pkg-config \
-    ffmpeg librsvg2-bin fonts-noto-core \
-    && command -v rsvg-convert \
+    python3 curl ffmpeg librsvg2-bin fonts-noto-core \
+    && curl -fL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+       -o /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp \
+    && yt-dlp --version \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./

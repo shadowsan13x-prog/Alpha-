@@ -234,15 +234,23 @@ module.exports = async function angelCommand(
   const storedDevs = Array.isArray(data.developers)
     ? data.developers
     : Array.isArray(data.developers?.list) ? data.developers.list : [];
-  const configDevs = [
+  const disabledDevs = new Set(
+    (Array.isArray(data.disabledDevelopers) ? data.disabledDevelopers : [])
+      .map(value => String(value || "").trim())
+      .filter(id => /^[0-9]{5,25}$/.test(id))
+  );
+  const fallbackDevs = [
+    ...storedDevs,
     ...(Array.isArray(config.DEV_IDS) ? config.DEV_IDS : []),
     config.DEV_ID,
+    ...(Array.isArray(config.DEV_CONFIGURED_IDS) ? config.DEV_CONFIGURED_IDS : []),
     ...(Array.isArray(config.developers) ? config.developers : []),
     config.owner
-  ].map(value => String(value || "").trim()).filter(Boolean);
-  const isDeveloper = access.isDeveloper === true ||
-    storedDevs.map(String).includes(senderID) || configDevs.includes(senderID);
-  const ownerID = String(config.DEV_ID || config.DEV_IDS?.[0] || "").trim();
+  ].map(value => String(value || "").trim())
+    .filter(id => /^[0-9]{5,25}$/.test(id) && !disabledDevs.has(id));
+  const isDeveloper = typeof access?.isDeveloper === "boolean"
+    ? access.isDeveloper
+    : fallbackDevs.includes(senderID);
 
   const reply = message => sendMessage(api, message, threadID, event?.messageID, botSentMessages);
   if (!isDeveloper) return reply("⛔ أمر Angel للمطورين فقط.");
@@ -251,9 +259,6 @@ module.exports = async function angelCommand(
   if (["off", "stop", "إيقاف", "ايقاف", "وقف"].includes(action)) {
     const all = String(args?.[2] || "").trim().toLowerCase() === "all";
     if (all) {
-      if (!ownerID || senderID !== ownerID) {
-        return reply("🔒 إيقاف جميع مهام Angel متاح للمالك الأساسي فقط.");
-      }
       const count = stopAll(automicTimers);
       return reply(`🛑 تم إيقاف ${count} مهمة Angel نشطة في عملية ALPHA الحالية.`);
     }

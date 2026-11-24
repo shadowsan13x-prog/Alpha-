@@ -21,12 +21,12 @@ const savedConfig = (() => {
   catch { return {}; }
 })();
 const SESSION_ID = String(process.env.SHADOW_SESSION_ID || "1");
-if (!/^[123]$/.test(SESSION_ID)) throw new Error("رقم الجلسة غير صالح");
+if (!/^[12]$/.test(SESSION_ID)) throw new Error("رقم الجلسة غير صالح");
 const SESSION_SUFFIX = ISOLATED_SESSION ? "" : (SESSION_ID === "1" ? "" : SESSION_ID);
 const SESSION_FILE = path.join(DATA_DIR, "appState" + SESSION_SUFFIX + ".json");
 const DATA_FILE = path.join(DATA_DIR, "data" + SESSION_SUFFIX + ".json");
 const CUSTOM_COMMANDS_FILE = path.join(DATA_DIR, "custom-commands" + SESSION_SUFFIX + ".json");
-const PORT = Number(process.env.PORT || process.env.SHADOW_BOT_PORT || (SESSION_ID === "1" ? 3000 : SESSION_ID === "2" ? 3002 : 3003));
+const PORT = Number(process.env.PORT || process.env.SHADOW_BOT_PORT || (SESSION_ID === "1" ? 3000 : 3002));
 const sessionConfig = savedConfig.SESSIONS?.[SESSION_ID] || (ISOLATED_SESSION ? savedConfig : {});
 const environmentDevIds = String(process.env.DEV_IDS || "")
   .split(",").map(value => value.trim()).filter(value => /^[0-9]{5,25}$/.test(value));
@@ -78,6 +78,23 @@ function getStoredDeveloperIds(data = {}) {
     .filter(value => /^[0-9]{5,25}$/.test(value)))];
 }
 
+function getAllDeveloperIds(settings = {}, data = {}) {
+  return [...new Set([
+    ...(Array.isArray(settings.ids) ? settings.ids : []),
+    ...getStoredDeveloperIds(data)
+  ].map(value => String(value || "").trim())
+    .filter(id => /^[0-9]{5,25}$/.test(id)))];
+}
+
+function getActiveDeveloperIds(settings = {}, data = {}) {
+  const disabled = new Set(
+    (Array.isArray(data?.disabledDevelopers) ? data.disabledDevelopers : [])
+      .map(value => String(value || "").trim())
+      .filter(value => /^[0-9]{5,25}$/.test(value))
+  );
+  return getAllDeveloperIds(settings, data).filter(id => !disabled.has(id));
+}
+
 const developerSettings = getSessionDeveloperSettings(savedConfig);
 const DEV_ID = developerSettings.id;
 const DEV_IDS = developerSettings.ids;
@@ -88,6 +105,8 @@ const config = {
   NICK_GUARD_ENABLED: (sessionConfig.NICK_GUARD_ENABLED ?? (!ISOLATED_SESSION ? savedConfig.NICK_GUARD_ENABLED : undefined)) !== false,
   DEV_ID,
   DEV_IDS,
+  DEV_CONFIGURED_IDS: [...developerSettings.ids],
+  DEV_ALL_IDS: [...developerSettings.ids],
   DEV_NICK: String(sessionConfig.DEV_NICK || "KAI"),
   DEV_NICK_GUARD_ENABLED: (
     sessionConfig.DEV_NICK_GUARD_ENABLED ??
@@ -380,8 +399,12 @@ fcaLogin({ appState }, { listenEvents: true, selfListen: false }, (err, api) => 
 
       const developerSettings = getSessionDeveloperSettings(latest);
       const currentData = loadData() || {};
-      config.DEV_ID = developerSettings.id;
-      config.DEV_IDS = [...new Set([...developerSettings.ids, ...getStoredDeveloperIds(currentData)])];
+      config.DEV_CONFIGURED_IDS = [...developerSettings.ids];
+      config.DEV_ALL_IDS = getAllDeveloperIds(developerSettings, currentData);
+      config.DEV_IDS = getActiveDeveloperIds(developerSettings, currentData);
+      config.DEV_ID = config.DEV_IDS.includes(developerSettings.id)
+        ? developerSettings.id
+        : (config.DEV_IDS[0] || "");
       messageActivity.setDeveloperIds(config.DEV_IDS);
 
       const targets = [
@@ -572,8 +595,12 @@ fcaLogin({ appState }, { listenEvents: true, selfListen: false }, (err, api) => 
     // Load the standalone developer list before protections and command authorization.
     const currentData = loadData() || {};
     const startupDeveloperSettings = getSessionDeveloperSettings(savedConfig);
-    config.DEV_ID = startupDeveloperSettings.id;
-    config.DEV_IDS = [...new Set([...startupDeveloperSettings.ids, ...getStoredDeveloperIds(currentData)])];
+    config.DEV_CONFIGURED_IDS = [...startupDeveloperSettings.ids];
+    config.DEV_ALL_IDS = getAllDeveloperIds(startupDeveloperSettings, currentData);
+    config.DEV_IDS = getActiveDeveloperIds(startupDeveloperSettings, currentData);
+    config.DEV_ID = config.DEV_IDS.includes(startupDeveloperSettings.id)
+      ? startupDeveloperSettings.id
+      : (config.DEV_IDS[0] || "");
     messageActivity.setDeveloperIds(config.DEV_IDS);
 
     // إيقاف جميع أحداث القروبات المكتومة قبل تشغيل أي معالج
@@ -730,12 +757,14 @@ fcaLogin({ appState }, { listenEvents: true, selfListen: false }, (err, api) => 
     }
 
     const liveDeveloperSettings = getSessionDeveloperSettings(liveConfig);
-    const developerIds = [...new Set([
-      ...liveDeveloperSettings.ids,
-      ...getStoredDeveloperIds(data)
-    ])];
-    config.DEV_ID = liveDeveloperSettings.id;
+    const allDeveloperIds = getAllDeveloperIds(liveDeveloperSettings, data);
+    const developerIds = getActiveDeveloperIds(liveDeveloperSettings, data);
+    config.DEV_CONFIGURED_IDS = [...liveDeveloperSettings.ids];
+    config.DEV_ALL_IDS = allDeveloperIds;
     config.DEV_IDS = developerIds;
+    config.DEV_ID = developerIds.includes(liveDeveloperSettings.id)
+      ? liveDeveloperSettings.id
+      : (developerIds[0] || "");
     messageActivity.setDeveloperIds(developerIds);
     const isDeveloper = developerIds.includes(senderID);
 

@@ -20,6 +20,23 @@ function getPrefix(config = {}) {
   );
 }
 
+function getCommandNames(value) {
+  if (!value) return [];
+
+  let items = [];
+  if (value instanceof Map) items = [...value.keys()];
+  else if (value instanceof Set) items = [...value];
+  else if (Array.isArray(value)) items = value;
+  else if (typeof value === "object") items = Object.keys(value);
+
+  return items
+    .map(item => typeof item === "string"
+      ? item
+      : item?.name || item?.command || "")
+    .map(name => String(name).trim())
+    .filter(Boolean);
+}
+
 const command = async (
   api,
   event,
@@ -36,40 +53,58 @@ const command = async (
   customCommandNames
 ) => {
   try {
-    const elapsed = Number(startTime) > 0
-      ? Math.max(0, Date.now() - Number(startTime))
-      : process.uptime() * 1000;
+    let remaining = Math.floor(
+      (Number(startTime) > 0
+        ? Math.max(0, Date.now() - Number(startTime))
+        : process.uptime() * 1000) / 1000
+    );
 
-    let seconds = Math.floor(elapsed / 1000);
-    const days = Math.floor(seconds / 86400);
-    seconds %= 86400;
+    const days = Math.floor(remaining / 86400);
+    remaining %= 86400;
 
-    const hours = Math.floor(seconds / 3600);
-    seconds %= 3600;
+    const hours = Math.floor(remaining / 3600);
+    remaining %= 3600;
 
-    const minutes = Math.floor(seconds / 60);
-    seconds %= 60;
+    const minutes = Math.floor(remaining / 60);
+    const seconds = remaining % 60;
 
     const hosting = hostingInfo
       ? String(hostingInfo)
       : getHosting();
 
     const prefix = getPrefix(config);
+    const memory = process.memoryUsage();
+    const ram = (memory.rss / 1024 / 1024).toFixed(1);
+
+    const commands = [...new Set([
+      ...getCommandNames(builtInCommands),
+      ...getCommandNames(customCommandNames)
+    ])].sort((a, b) => a.localeCompare(b, "ar"));
+
+    const commandText = commands.length
+      ? commands.map(name => `  ◈ ${prefix}${name}`).join("\n")
+      : "  ◈ قائمة الأوامر غير متاحة";
 
     const message = [
-      "⏳ UPTIME・وقت التشغيل",
+      "╭━━━━━━ ⌁ ALPHA ⌁ ━━━━━━╮",
+      "       NEBULA SYSTEM",
+      "╰━━━━━━━━━━━━━━━━━━━━╯",
       "",
-      `📅 Days・الأيام: ${days}`,
-      `🕒 Hours・الساعات: ${hours}`,
-      `⏱️ Minutes・الدقائق: ${minutes}`,
-      `⌛ Seconds・الثواني: ${seconds}`,
+      "◈ الحالة      : يعمل",
+      `◈ الاستضافة  : ${hosting}`,
+      `◈ البادئة     : ${prefix}`,
+      `◈ مدة التشغيل: ${days} يوم | ${hours} ساعة`,
+      `                ${minutes} دقيقة | ${seconds} ثانية`,
       "",
-      "⚡ Status・الحالة: Online",
-      `🔰 Prefix・البادئة: ${prefix}`,
-      `🖥️ Hosting・الاستضافة: ${hosting}`,
-      "🌐 Connection・الاتصال: Stable",
+      "◈ RAM         : " + ram + " MB",
+      "◈ النظام      : " + os.platform(),
+      "◈ Node.js     : " + process.version,
       "",
-      "⌁ Powered by ALPHA SYSTEM"
+      "╭──── ⌁ الأوامر المتاحة ⌁ ────╮",
+      commandText,
+      "╰━━━━━━━━━━━━━━━━━━━━╯",
+      "",
+      "       ⌁ ALPHA NEBULA ⌁"
     ].join("\n");
 
     return api.sendMessage(message, event.threadID);
@@ -81,7 +116,6 @@ const command = async (
     );
   }
 };
-
 command.aliases = ["ابتايم", "up"];
 module.exports = command;
 module.exports.aliases = ["ابتايم", "up"];

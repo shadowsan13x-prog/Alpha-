@@ -9,7 +9,7 @@ const MAX_INTERVAL_SECONDS = 86400;
 
 function getSessionId(value = process.env.SHADOW_SESSION_ID || "1") {
   const id = String(value);
-  return id === "1" || id === "2" ? id : "1";
+  return ["1", "2"].includes(id) ? id : "1";
 }
 
 function stateKey(threadID, sessionId = getSessionId()) {
@@ -271,7 +271,16 @@ function getDeveloperIds(data, config) {
     config?.DEV_ID,
     config?.owner
   ];
-  return new Set([...stored, ...configured].map(normalizeId).filter(Boolean));
+  const disabled = new Set(
+    (Array.isArray(data?.disabledDevelopers) ? data.disabledDevelopers : [])
+      .map(normalizeId)
+      .filter(Boolean)
+  );
+  return new Set(
+    [...stored, ...configured]
+      .map(normalizeId)
+      .filter(id => id && !disabled.has(id))
+  );
 }
 
 async function finishJob(job) {
@@ -342,16 +351,16 @@ module.exports = async function autCommand(
   }
 
   const developerIds = getDeveloperIds(data, config);
-  const isDeveloper = access.isDeveloper === true || access.isDev === true || developerIds.has(senderID);
+  const isDeveloper = typeof access?.isDeveloper === "boolean"
+    ? access.isDeveloper
+    : typeof access?.isDev === "boolean"
+      ? access.isDev
+      : developerIds.has(senderID);
   if (!isDeveloper) return reply("⛔ هذا الأمر للمطورين فقط.");
-  const ownerID = normalizeId(config?.DEV_ID || config?.DEV_IDS?.[0]);
 
   const action = normalizeId(commandArgs[1]).trim().toLowerCase();
   if (["off", "stop", "إيقاف", "ايقاف", "وقف"].includes(action)) {
     if (normalizeId(commandArgs[2]).trim().toLowerCase() === "all") {
-      if (!ownerID || senderID !== ownerID) {
-        return reply("🔒 إيقاف جميع مهام Aut متاح للمالك الأساسي فقط.");
-      }
       const count = stopAll(automicTimers);
       return reply(`🛑 تم إيقاف ${count} مهمة Aut.`);
     }
@@ -378,7 +387,7 @@ module.exports = async function autCommand(
       `${prefix}aut [النص] — تشغيل الرد التلقائي\\n` +
       `${prefix}aut [النص] 200s — تحديد الفاصل بالثواني\\n` +
       `${prefix}aut off — إيقاف هذه المحادثة\\n` +
-      `${prefix}aut off all — إيقاف مهام هذه الجلسة (للمالك فقط)`
+      `${prefix}aut off all — إيقاف مهام هذه الجلسة (للمطورين فقط)`
     );
   }
 
@@ -477,7 +486,25 @@ module.exports = async function autCommand(
       }
 
       // Do not treat a failed history request as proof that the group is idle.
-      if (result.error) return;
+      if (result.error) {
+        const errorMessage = String(
+          result.error?.message || result.error || "unknown-history-error"
+        );
+
+        if (job.lastHistoryError !== errorMessage) {
+          console.error("[AUT] getThreadHistory failed:", {
+            threadID,
+            error: errorMessage
+          });
+          job.lastHistoryError = errorMessage;
+        }
+        return;
+      }
+
+      if (job.lastHistoryError) {
+        console.log("[AUT] getThreadHistory recovered:", { threadID });
+        job.lastHistoryError = null;
+      }
 
       const fresh = (result.history || [])
         .filter(message => {

@@ -36,7 +36,7 @@ test("Angel and its English shortcut stay developer-only in public mode", () => 
   }
 });
 
-test("only the primary owner can stop all Angel tasks", async () => {
+test("any developer in the session can stop all Angel tasks", async () => {
   const lockDir = setupLockDirectory();
   const sent = [];
   const api = {
@@ -47,25 +47,26 @@ test("only the primary owner can stop all Angel tasks", async () => {
   };
   const timers = {};
   const config = { DEV_ID: "111111", DEV_IDS: ["111111", "222222"] };
-  const run = (senderID, args, rawText) => {
+
+  const run = (senderID, threadID, args, rawText, access = { isDeveloper: true }, data = {}) => {
     args.rawText = rawText || "";
-    return angel(api, { threadID: "angel-group", senderID, messageID: "source" }, args,
-      Date.now(), () => ({}), () => {}, timers, config, {}, {}, "999999",
-      [], [], {}, { isDeveloper: true });
+    return angel(api, { threadID, senderID, messageID: "source" }, args,
+      Date.now(), () => data, () => {}, timers, config, {}, {}, "999999",
+      [], [], {}, access);
   };
 
   try {
-    await run("111111", ["ag", "Hello", "60s"], "Hello 60s");
-    assert.ok(timers[angel.stateKey("angel-group")]);
-    assert.equal(sent[0].message, "Hello");
+    await run("111111", "angel-group-1", ["ag", "Hello", "60s"], "Hello 60s");
+    await run("222222", "angel-group-2", ["ag", "World", "60s"], "World 60s");
 
-    await run("222222", ["ag", "off", "all"], "off all");
-    assert.ok(timers[angel.stateKey("angel-group")], "المطور الإضافي يجب ألا يوقف المهام");
-    assert.match(sent.at(-1).message, /للمالك الأساسي فقط/);
+    assert.ok(timers[angel.stateKey("angel-group-1")]);
+    assert.ok(timers[angel.stateKey("angel-group-2")]);
 
-    await run("111111", ["ag", "off", "all"], "off all");
-    assert.equal(timers[angel.stateKey("angel-group")], undefined);
-    assert.match(sent.at(-1).message, /تم إيقاف 1 مهمة Angel/);
+    await run("222222", "angel-group-2", ["ag", "off", "all"], "off all");
+
+    assert.equal(timers[angel.stateKey("angel-group-1")], undefined);
+    assert.equal(timers[angel.stateKey("angel-group-2")], undefined);
+    assert.match(sent.at(-1).message, /تم إيقاف 2 مهمة Angel/);
   } finally {
     angel.stopAll(timers);
     fs.rmSync(lockDir, { recursive: true, force: true });
@@ -73,6 +74,56 @@ test("only the primary owner can stop all Angel tasks", async () => {
   }
 });
 
+
+test("Angel rejects disabled developers even when stale IDs remain in stored/config lists", async () => {
+  const lockDir = setupLockDirectory();
+  const sent = [];
+  const api = {
+    async sendMessage(message, threadID) {
+      sent.push(String(message));
+      return { messageID: `m${sent.length}` };
+    }
+  };
+  const timers = {};
+  const config = {
+    DEV_ID: "111111",
+    DEV_IDS: ["111111"],
+    DEV_CONFIGURED_IDS: ["111111"]
+  };
+
+  try {
+    const run = (access, data) => angel(
+      api,
+      { threadID: "angel-disabled-test", senderID: "111111", messageID: "source" },
+      ["ag", "Hello", "60s"],
+      Date.now(),
+      () => data,
+      () => {},
+      timers,
+      config,
+      {},
+      {},
+      "999999",
+      [], [], {},
+      access
+    );
+
+    await run({}, {
+      developers: ["111111"],
+      disabledDevelopers: ["111111"]
+    });
+    assert.match(sent.at(-1), /للمطورين فقط/);
+    assert.equal(timers[angel.stateKey("angel-disabled-test")], undefined);
+
+    await run({ isDeveloper: false }, { developers: ["111111"] });
+    assert.match(sent.at(-1), /للمطورين فقط/);
+    assert.equal(timers[angel.stateKey("angel-disabled-test")], undefined);
+  } finally {
+    angel.stopAll(timers);
+    fs.rmSync(lockDir, { recursive: true, force: true });
+    delete process.env.SHADOW_REPEAT_LOCK_DIR;
+  }
+});
 
 test("Angel sends the requested text immediately using the same callback flow as بيس", async () => {
   const lockDir = setupLockDirectory();

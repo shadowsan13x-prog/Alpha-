@@ -10,7 +10,6 @@ function uniqueIds(values) {
 
 async function getUserName(api, uid) {
   if (typeof api.getUserInfo !== "function") return uid;
-
   try {
     const info = await new Promise((resolve, reject) => {
       let settled = false;
@@ -22,7 +21,6 @@ async function getUserName(api, uid) {
         if (error) reject(error);
         else resolve(value);
       };
-
       try {
         const result = api.getUserInfo(uid, (error, value) => finish(error, value));
         if (result && typeof result.then === "function") {
@@ -44,74 +42,71 @@ function readStoredDevelopers(data) {
   return [];
 }
 
+function readDisabledDevelopers(data) {
+  return uniqueIds(data?.disabledDevelopers);
+}
+
 module.exports = async function devCommand(
-  api,
-  event,
-  args,
-  _startTime,
-  loadData,
-  saveData,
-  _automicTimers,
-  config = {},
-  _hostingInfo,
-  _botSentMessages,
-  BOT_ID,
-  _builtInCommandNames,
-  _customCommandNames,
-  _commands,
-  access = {}
+  api, event, args, _startTime, loadData, saveData, _automicTimers,
+  config = {}, _hostingInfo, _botSentMessages, BOT_ID,
+  _builtInCommandNames, _customCommandNames, _commands, access = {}
 ) {
   const threadID = String(event?.threadID || "");
   const senderID = String(event?.senderID || "");
-  const send = message => api.sendMessage(String(message), threadID,
-    event?.messageID == null ? undefined : String(event.messageID));
+  const send = message => api.sendMessage(
+    String(message),
+    threadID,
+    event?.messageID == null ? undefined : String(event.messageID)
+  );
 
   const data = (typeof loadData === "function" ? loadData() : {}) || {};
-  const devs = readStoredDevelopers(data);
+  const storedDevs = readStoredDevelopers(data);
   const configDevs = uniqueIds([
-    ...(Array.isArray(config.DEV_IDS) ? config.DEV_IDS : []),
+    ...(Array.isArray(config.DEV_CONFIGURED_IDS)
+      ? config.DEV_CONFIGURED_IDS
+      : (Array.isArray(config.DEV_IDS) ? config.DEV_IDS : [])),
     config.DEV_ID
   ]);
-  const ownerID = String(config.DEV_ID || configDevs[0] || "").trim();
-  const isDev = access.isDeveloper === true || devs.includes(senderID) || configDevs.includes(senderID);
+  const allDevs = uniqueIds([
+    ...(Array.isArray(config.DEV_ALL_IDS) ? config.DEV_ALL_IDS : []),
+    ...configDevs,
+    ...storedDevs
+  ]);
+  const disabled = new Set(readDisabledDevelopers(data));
+  const activeDevs = allDevs.filter(uid => !disabled.has(uid));
 
-  if (!isDev) return send("⛔ هذا الأمر للمطورين فقط.");
+  // Authorization always uses the active list, never a stale config ID.
+  if (!activeDevs.includes(senderID)) {
+    return send("⛔ هذا الأمر للمطورين الفعّالين في هذه الجلسة فقط.");
+  }
 
-  // args[0] is the invoked command name; the subcommand is args[1].
   const sub = String(args?.[1] || "").trim().toLowerCase();
+
   if (!sub) {
     return send(
       "🛠 أوامر المطورين:\n" +
-      "• !dev add [UID] — للمالك الأساسي فقط\n" +
-      "• !dev rm [UID] — للمالك الأساسي فقط\n" +
+      "• !dev add [UID] — إضافة مطور أو إعادة تفعيله\n" +
+      "• !dev rm [UID] — تعطيل مطور\n" +
       "• !dev ls — عرض قائمة المطورين"
     );
   }
 
   if (["ls", "list", "l"].includes(sub)) {
-    const all = uniqueIds([...configDevs, ...devs]);
-    if (!all.length) return send("📭 لا يوجد مطورون مسجلون.");
+    if (!allDevs.length) return send("📭 لا يوجد مطورون مسجلون.");
 
-    const lines = [`👨‍💻 مطورو ALPHA (${all.length}):`];
-    for (let index = 0; index < all.length; index++) {
-      const uid = all[index];
+    const lines = [`👨‍💻 مطورو ALPHA (${activeDevs.length} فعّال):`];
+    for (let index = 0; index < allDevs.length; index++) {
+      const uid = allDevs[index];
       const name = await getUserName(api, uid);
-      const tags = [
-        uid === ownerID ? "👑 المالك الأساسي" : "",
-        configDevs.includes(uid) && uid !== ownerID ? "⭐ من الإعدادات" : ""
-      ].filter(Boolean).join(" · ");
-      lines.push(`${index + 1}. ${name}${tags ? ` — ${tags}` : ""}\n   UID: ${uid}`);
+      const status = disabled.has(uid) ? "⛔ معطّل" : "✅ فعّال";
+      const source = configDevs.includes(uid) ? "⭐ إعدادات الجلسة" : "🔹 مطور إضافي";
+      lines.push(`${index + 1}. ${name} — ${status} · ${source}\n   UID: ${uid}`);
     }
     return send(lines.join("\n\n"));
   }
 
   if (!["add", "a", "rm", "remove", "del", "r"].includes(sub)) {
-    return send("❓ استخدام الأمر: dev add | dev rm | dev ls");
-  }
-
-  // Adding/removing developers changes bot-wide privileges, so only the primary owner may do it.
-  if (!ownerID || senderID !== ownerID) {
-    return send("🔒 إضافة المطورين وحذفهم متاحان للمالك الأساسي فقط.");
+    return send("❓ الاستخدام: dev add [UID] | dev rm [UID] | dev ls");
   }
 
   let target = "";
@@ -126,38 +121,51 @@ module.exports = async function devCommand(
   if (!target || !UID_RE.test(target)) {
     return send("↩️ رد على رسالة الشخص أو اكتب UID صحيحاً بعد الأمر.");
   }
-  if (target === String(BOT_ID || "")) return send("🤖 لا يمكن إضافة حساب البوت كمطور.");
 
   const name = await getUserName(api, target);
 
   if (["add", "a"].includes(sub)) {
-    if (configDevs.includes(target) || devs.includes(target)) {
-      return send(`ℹ️ ${name} مسجل كمطور بالفعل.\nUID: ${target}`);
+    if (target === String(BOT_ID || "")) {
+      return send("🤖 لا يمكن إضافة حساب البوت كمطور.");
     }
 
-    const next = uniqueIds([...devs, target]);
-    data.developers = next;
+    if (allDevs.includes(target)) {
+      if (!disabled.has(target)) {
+        return send(`ℹ️ ${name} مطور فعّال بالفعل.\nUID: ${target}`);
+      }
+
+      data.disabledDevelopers = [...disabled].filter(uid => uid !== target);
+      try {
+        saveData(data);
+        return send(`✅ تمت إعادة تفعيل ${name} كمطور في هذه الجلسة.\nUID: ${target}`);
+      } catch (error) {
+        return send(`❌ تعذرت إعادة تفعيل المطور.\nالسبب: ${String(error?.message || error).slice(0, 180)}`);
+      }
+    }
+
+    data.developers = uniqueIds([...storedDevs, target]);
     try {
       saveData(data);
-      return send(`✅ تمت إضافة ${name} كمطور في ALPHA.\nUID: ${target}`);
+      return send(`✅ تمت إضافة ${name} كمطور في هذه الجلسة.\nUID: ${target}`);
     } catch (error) {
       return send(`❌ تعذرت إضافة المطور وحفظ القائمة.\nالسبب: ${String(error?.message || error).slice(0, 180)}`);
     }
   }
 
-  if (configDevs.includes(target)) {
-    return send(`🔒 ${name} مطور أساسي محفوظ في الإعدادات ولا يمكن حذفه بهذا الأمر.`);
-  }
-  if (!devs.includes(target)) {
-    return send(`ℹ️ ${name} ليس ضمن قائمة المطورين الإضافيين.`);
+  if (!allDevs.includes(target) || disabled.has(target)) {
+    return send(`ℹ️ ${name} ليس مطوراً فعّالاً في هذه الجلسة.`);
   }
 
-  data.developers = devs.filter(uid => uid !== target);
+  if (activeDevs.length <= 1) {
+    return send("🔒 لا يمكن تعطيل آخر مطور فعّال في الجلسة.");
+  }
+
+  data.disabledDevelopers = uniqueIds([...disabled, target]);
   try {
     saveData(data);
-    return send(`🗑️ تم حذف ${name} من قائمة المطورين.\nUID: ${target}`);
+    return send(`🗑️ تم تعطيل ${name} كمطور في هذه الجلسة.\nUID: ${target}`);
   } catch (error) {
-    return send(`❌ تعذر حذف المطور وحفظ القائمة.\nالسبب: ${String(error?.message || error).slice(0, 180)}`);
+    return send(`❌ تعذر تعطيل المطور وحفظ القائمة.\nالسبب: ${String(error?.message || error).slice(0, 180)}`);
   }
 };
 
