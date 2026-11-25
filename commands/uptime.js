@@ -1,6 +1,7 @@
 "use strict";
 
 const os = require("os");
+const fs = require("fs");
 
 function getHosting() {
   if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) return "Railway";
@@ -12,29 +13,42 @@ function getHosting() {
 }
 
 function getPrefix(config = {}) {
-  return String(
-    config.PREFIX ||
-    config.prefix ||
-    config.COMMAND_PREFIX ||
-    "!"
-  );
+  return String(config.PREFIX || config.prefix || config.COMMAND_PREFIX || "!");
 }
 
-function getCommandNames(value) {
-  if (!value) return [];
+function formatDuration(value) {
+  let seconds = Math.max(0, Math.floor(Number(value) || 0));
+  const days = Math.floor(seconds / 86400);
+  seconds %= 86400;
+  const hours = Math.floor(seconds / 3600);
+  seconds %= 3600;
+  const minutes = Math.floor(seconds / 60);
+  seconds %= 60;
+  return `${days} يوم | ${hours} ساعة | ${minutes} دقيقة | ${seconds} ثانية`;
+}
 
-  let items = [];
-  if (value instanceof Map) items = [...value.keys()];
-  else if (value instanceof Set) items = [...value];
-  else if (Array.isArray(value)) items = value;
-  else if (typeof value === "object") items = Object.keys(value);
+function mb(value) {
+  return (value / 1024 / 1024).toFixed(1);
+}
 
-  return items
-    .map(item => typeof item === "string"
-      ? item
-      : item?.name || item?.command || "")
-    .map(name => String(name).trim())
-    .filter(Boolean);
+async function getDiskInfo() {
+  try {
+    const stats = await fs.promises.statfs("/");
+    const total = Number(stats.blocks) * Number(stats.bsize);
+    const free = Number(stats.bavail) * Number(stats.bsize);
+    return `${mb(total - free)} / ${mb(total)} MB`;
+  } catch (_) {
+    return "غير متاح";
+  }
+}
+
+async function getProcessCount() {
+  try {
+    const entries = await fs.promises.readdir("/proc");
+    return entries.filter(entry => /^\d+$/.test(entry)).length;
+  } catch (_) {
+    return "غير متاح";
+  }
 }
 
 const command = async (
@@ -46,62 +60,44 @@ const command = async (
   saveData,
   automicTimers,
   config = {},
-  hostingInfo,
-  botSentMessages,
-  BOT_ID,
-  builtInCommands,
-  customCommandNames
+  hostingInfo
 ) => {
   try {
-    let remaining = Math.floor(
-      (Number(startTime) > 0
-        ? Math.max(0, Date.now() - Number(startTime))
-        : process.uptime() * 1000) / 1000
-    );
+    const uptimeSeconds = Number(startTime) > 0
+      ? Math.max(0, (Date.now() - Number(startTime)) / 1000)
+      : process.uptime();
 
-    const days = Math.floor(remaining / 86400);
-    remaining %= 86400;
-
-    const hours = Math.floor(remaining / 3600);
-    remaining %= 3600;
-
-    const minutes = Math.floor(remaining / 60);
-    const seconds = remaining % 60;
-
-    const hosting = hostingInfo
-      ? String(hostingInfo)
-      : getHosting();
-
+    const hosting = hostingInfo ? String(hostingInfo) : getHosting();
     const prefix = getPrefix(config);
     const memory = process.memoryUsage();
-    const ram = (memory.rss / 1024 / 1024).toFixed(1);
-
-    const commands = [...new Set([
-      ...getCommandNames(builtInCommands),
-      ...getCommandNames(customCommandNames)
-    ])].sort((a, b) => a.localeCompare(b, "ar"));
-
-    const commandText = commands.length
-      ? commands.map(name => `  ◈ ${prefix}${name}`).join("\n")
-      : "  ◈ قائمة الأوامر غير متاحة";
+    const totalRam = os.totalmem();
+    const freeRam = os.freemem();
+    const usedRam = totalRam - freeRam;
+    const load = os.loadavg();
+    const disk = await getDiskInfo();
+    const processes = await getProcessCount();
 
     const message = [
       "╭━━━━━━ ⌁ ALPHA ⌁ ━━━━━━╮",
       "       NEBULA SYSTEM",
       "╰━━━━━━━━━━━━━━━━━━━━╯",
       "",
-      "◈ الحالة      : يعمل",
-      `◈ الاستضافة  : ${hosting}`,
-      `◈ البادئة     : ${prefix}`,
-      `◈ مدة التشغيل: ${days} يوم | ${hours} ساعة`,
-      `                ${minutes} دقيقة | ${seconds} ثانية`,
+      "◈ الحالة       : يعمل بنجاح",
+      `◈ الاستضافة   : ${hosting}`,
+      `◈ البادئة      : ${prefix}`,
+      `◈ مدة البوت    : ${formatDuration(uptimeSeconds)}`,
       "",
-      "◈ RAM         : " + ram + " MB",
-      "◈ النظام      : " + os.platform(),
-      "◈ Node.js     : " + process.version,
+      "╭──── ⌁ SYSTEM METRICS ⌁ ────╮",
+      `◈ حمل المعالج  : ${load.map(v => v.toFixed(2)).join(" | ")}`,
+      `◈ الذاكرة      : ${mb(usedRam)} / ${mb(totalRam)} MB`,
+      `◈ ذاكرة البوت  : ${mb(memory.rss)} MB`,
+      `◈ مساحة القرص  : ${disk}`,
+      `◈ عمليات النظام: ${processes}`,
+      `◈ تشغيل النظام : ${formatDuration(os.uptime())}`,
       "",
-      "╭──── ⌁ الأوامر المتاحة ⌁ ────╮",
-      commandText,
+      `◈ المعالج      : ${os.cpus().length} نواة`,
+      `◈ النظام       : ${os.platform()} ${os.arch()}`,
+      `◈ Node.js      : ${process.version}`,
       "╰━━━━━━━━━━━━━━━━━━━━╯",
       "",
       "       ⌁ ALPHA NEBULA ⌁"
@@ -116,6 +112,6 @@ const command = async (
     );
   }
 };
+
 command.aliases = ["ابتايم", "up"];
 module.exports = command;
-module.exports.aliases = ["ابتايم", "up"];

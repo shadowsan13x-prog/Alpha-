@@ -1,3 +1,5 @@
+"use strict";
+
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -32,7 +34,35 @@ function forgetBotMessage(botSentMessages, threadID, messageID) {
   botSentMessages[threadID] = list.filter(item => String(item) !== id);
 }
 
-function runYtDlp(url, output) {
+async function createCookiesFile() {
+  const encoded = process.env.YTDLP_COOKIES_BASE64;
+  if (!encoded) return null;
+
+  const content = Buffer.from(encoded.trim(), "base64").toString("utf8");
+
+  if (
+    !content ||
+    !content.includes("\n") ||
+    !/(# Netscape HTTP Cookie File|# HTTP Cookie File)/i.test(content)
+  ) {
+    throw new Error("ملف Cookies غير صالح أو ليس بصيغة Netscape.");
+  }
+
+  const file = path.join(
+    os.tmpdir(),
+    `alpha_cookies_${process.pid}_${Date.now()}.txt`
+  );
+
+  await fs.promises.writeFile(file, content, {
+    encoding: "utf8",
+    mode: 0o600,
+    flag: "wx"
+  });
+
+  return file;
+}
+
+function runYtDlp(url, output, cookiesFile) {
   return new Promise((resolve, reject) => {
     const args = [
       "--no-playlist",
@@ -45,9 +75,14 @@ function runYtDlp(url, output) {
       "--audio-format", "mp3",
       "--audio-quality", "5",
       "--max-filesize", String(MAX_BYTES),
-      "-o", output,
-      url
+      "-o", output
     ];
+
+    if (cookiesFile) {
+      args.push("--cookies", cookiesFile);
+    }
+
+    args.push(url);
 
     const child = spawn("yt-dlp", args, {
       stdio: ["ignore", "ignore", "pipe"]
@@ -152,9 +187,7 @@ module.exports = async function songCommand(
       }
     }
 
-    if (!ffmpegPath) {
-      throw new Error("FFmpeg غير مثبت.");
-    }
+    if (!ffmpegPath) throw new Error("FFmpeg غير مثبت.");
 
     ffmpeg.setFfmpegPath(ffmpegPath);
   } catch (error) {
@@ -163,6 +196,7 @@ module.exports = async function songCommand(
 
   let waiting = null;
   let file = null;
+  let cookiesFile = null;
 
   async function clearWaiting() {
     const waitingID = waiting && waiting.messageID;
@@ -209,7 +243,9 @@ module.exports = async function songCommand(
       `alpha_song_${process.pid}_${Date.now()}.mp3`
     );
 
-    await runYtDlp(video.url, file);
+    cookiesFile = await createCookiesFile();
+
+    await runYtDlp(video.url, file, cookiesFile);
 
     const stats = await fs.promises.stat(file);
 
@@ -256,6 +292,10 @@ module.exports = async function songCommand(
   } finally {
     if (file) {
       await fs.promises.unlink(file).catch(() => {});
+    }
+
+    if (cookiesFile) {
+      await fs.promises.unlink(cookiesFile).catch(() => {});
     }
   }
 };
