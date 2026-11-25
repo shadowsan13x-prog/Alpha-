@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn } = require("child_process");
+const { finished } = require("stream/promises");
 
 const MAX_SECONDS = 25 * 60;
 const MAX_BYTES = 24 * 1024 * 1024;
@@ -261,18 +262,38 @@ module.exports = async function songCommand(
     await clearWaiting();
 
     const attachment = fs.createReadStream(file);
+    let sendTimeout;
+
+    // Register stream completion before handing it to FCA.
+    const streamPromise = finished(attachment);
+
+    // Track both FCA acknowledgement and actual stream completion.
+    const sendPromise = send({
+      body:
+        `🎵 ${video.title || "بدون عنوان"}\n` +
+        `👤 ${(video.author && video.author.name) || "غير معروف"}\n` +
+        `⏱ ${video.timestamp || "غير معروفة"}`,
+      attachment
+    });
+
+    const timeoutPromise = new Promise((_, reject) => {
+      sendTimeout = setTimeout(
+        () => reject(new Error("انتهت مهلة إرسال ملف الصوت بعد 120 ثانية.")),
+        120000
+      );
+    });
 
     try {
-      await send({
-        body:
-          `🎵 ${video.title || "بدون عنوان"}\n` +
-          `👤 ${(video.author && video.author.name) || "غير معروف"}\n` +
-          `⏱ ${video.timestamp || "غير معروفة"}`,
-        attachment
-      });
+      await Promise.race([
+        Promise.all([sendPromise, streamPromise]),
+        timeoutPromise
+      ]);
     } catch (error) {
+      // Stop reading the file if sending fails or times out.
       attachment.destroy();
       throw error;
+    } finally {
+      clearTimeout(sendTimeout);
     }
   } catch (error) {
     await clearWaiting();

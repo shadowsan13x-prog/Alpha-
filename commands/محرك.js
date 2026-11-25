@@ -1,5 +1,7 @@
 "use strict";
 
+const { repeatTyping, TYPING_TIME_MS } = require("../SHADOW/repeat-typing");
+
 // One engine may run per group. Its reservation is shared with بيس.
 const ENGINE_INTERVALS = Object.freeze({
   1: 60_000,
@@ -76,6 +78,8 @@ function scheduleEngine(state, engine) {
     if (state.stopped || engine.stopped || state.engines[engine.id] !== engine) return;
     engine.sending = true;
     try {
+      await repeatTyping(state.api, state.threadID);
+      if (state.stopped || engine.stopped || state.engines[engine.id] !== engine) return;
       await sendOnce(state.api, engine.text, state.threadID);
       engine.lastSentAt = Date.now();
       console.log(`ALPHA ENGINE ${engine.id} SENT:`, state.threadID);
@@ -85,7 +89,7 @@ function scheduleEngine(state, engine) {
       engine.sending = false;
       scheduleEngine(state, engine);
     }
-  }, engine.intervalMs);
+  }, Math.max(0, engine.intervalMs - TYPING_TIME_MS));
   if (typeof engine.timer.unref === "function") engine.timer.unref();
 }
 
@@ -130,6 +134,10 @@ async function startEngine(api, threadID, automicTimers, engineID, text) {
 
   try {
     // أرسل النص الأصلي فقط دون معلومات تفعيل إضافية.
+    await repeatTyping(api, String(threadID));
+    if (state.stopped || engine.stopped || state.engines[id] !== engine) {
+      throw new Error("تم إيقاف المحرك قبل الإرسال.");
+    }
     await sendOnce(api, cleanText, String(threadID));
     engine.lastSentAt = Date.now();
     console.log(`ALPHA ENGINE ${id} FIRST SEND:`, threadID);

@@ -47,7 +47,7 @@ function parseAutInput(value) {
   };
 }
 const IDLE_LIMIT_MS = 16 * 60 * 1000;
-const TYPING_TIME_MS = 3 * 1000;
+const TYPING_TIME_MS = 4 * 1000;
 const HISTORY_LIMIT = 100;
 const HISTORY_TIMEOUT_MS = 10000;
 const MAX_SEEN_MESSAGES = 5000;
@@ -557,7 +557,7 @@ module.exports = async function autCommand(
 
   const started = await reply(
     "🤖 Aut يعمل الآن.\n" +
-    `يفحص كل ${parsedInput.intervalSeconds} ثانية ويرد على أحدث رسالة بشرية بعد إظهار الكتابة 3 ثوانٍ.\\n` +
+    `يفحص كل ${parsedInput.intervalSeconds} ثانية ويرد على أحدث رسالة بشرية بعد إظهار الكتابة 4 ثوانٍ.\\n` +
     "إذا مرّت 16 دقيقة دون رسالة بشرية، يرسل الختامية ثم يغادر المجموعة.\n" +
     "للإيقاف اليدوي: aut off"
   );

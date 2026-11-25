@@ -21,6 +21,8 @@ const INTERVAL_RE = /^(\d+(?:\.\d+)?)([smhd])(?:-(\d+(?:\.\d+)?)([smhd]))?$/i;
 
 // Active jobs are scoped to this ALPHA process. The shared repeat lock prevents
 // Angel from overlapping with بيس or محرك in the same conversation.
+const { repeatTyping, TYPING_TIME_MS } = require("../SHADOW/repeat-typing");
+
 const active = new Map();
 
 function stateKey(threadID) {
@@ -155,7 +157,7 @@ function scheduleNext(job) {
   const range = job.intervals[job.count % job.intervals.length];
   job.count += 1;
   const delay = range.min + Math.random() * (range.max - range.min);
-  job.timer = setTimeout(() => runTick(job), delay);
+  job.timer = setTimeout(() => runTick(job), Math.max(0, delay - TYPING_TIME_MS));
   if (typeof job.timer.unref === "function") job.timer.unref();
 }
 
@@ -163,6 +165,8 @@ async function runTick(job) {
   if (job.stopped || job.sending) return;
   job.sending = true;
   try {
+    await repeatTyping(job.api, job.threadID);
+    if (job.stopped) return;
     await sendMessage(job.api, job.text, job.threadID, undefined, job.botSentMessages);
   } catch (error) {
     console.error("ALPHA ANGEL SEND ERROR:", error?.message || error);
@@ -341,6 +345,8 @@ module.exports = async function angelCommand(
   try {
     // Match بيس: send the requested text immediately, without a separate
     // "started" message, then schedule the next send after the selected interval.
+    await repeatTyping(api, threadID);
+    if (job.stopped) return;
     await sendMessage(api, job.text, threadID, undefined, botSentMessages);
     if (job.stopped) return;
 

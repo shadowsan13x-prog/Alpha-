@@ -66,7 +66,7 @@ test("Aut uses بيس-style rawText parsing and preserves embedded newlines", as
   }
 });
 
-test("Aut replies only to the latest human message and shows typing for three seconds", async () => {
+test("Aut replies only to the latest human message and shows typing for four seconds", async () => {
   const incoming = [
     { messageID: "human-message-1", senderID: "222222", timestamp: Date.now() + 1000 },
     { messageID: "human-message-2", senderID: "333333", timestamp: Date.now() + 2000 }
@@ -187,9 +187,9 @@ test("Aut maps unsupported session IDs to session 1", () => {
   assert.equal(aut.stateKey("same-group", "3"), aut.stateKey("same-group", "1"));
 });
 
-test("Aut uses the requested 80-second check, 3-second typing, and 16-minute idle limit", () => {
+test("Aut uses the requested 80-second check, 4-second typing, and 16-minute idle limit", () => {
   assert.equal(aut.constants.POLL_GAP_MS, 80_000);
-  assert.equal(aut.constants.TYPING_TIME_MS, 3_000);
+  assert.equal(aut.constants.TYPING_TIME_MS, 4_000);
   assert.equal(aut.constants.IDLE_LIMIT_MS, 16 * 60 * 1000);
 });
 

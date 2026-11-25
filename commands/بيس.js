@@ -1,5 +1,7 @@
 "use strict";
 
+const { repeatTyping, TYPING_TIME_MS } = require("../SHADOW/repeat-typing");
+
 const MIN_INTERVAL_SECONDS = 12;
 const MAX_INTERVAL_SECONDS = 86400;
 const STATE_PREFIX = "__shadow_bis_repeat__:";
@@ -49,6 +51,8 @@ function scheduleNext(state, timers) {
     if (state.stopped || timers[state.key] !== state) return;
     state.sending = true;
     try {
+      await repeatTyping(state.api, state.threadID);
+      if (state.stopped || timers[state.key] !== state) return;
       await sendOnce(state.api, state.text, state.threadID);
       state.lastSentAt = Date.now();
     } catch (error) {
@@ -57,7 +61,7 @@ function scheduleNext(state, timers) {
       state.sending = false;
       scheduleNext(state, timers);
     }
-  }, state.intervalMs);
+  }, Math.max(0, state.intervalMs - TYPING_TIME_MS));
   if (typeof state.timer.unref === "function") state.timer.unref();
 }
 
@@ -122,6 +126,8 @@ module.exports = async (api, event, args, startTime, loadData, saveData, automic
 
   try {
     // أرسل النص الأصلي فقط دون معلومات تفعيل إضافية.
+    await repeatTyping(api, threadID);
+    if (state.stopped || automicTimers[key] !== state) return;
     await sendOnce(api, text, threadID);
     state.lastSentAt = Date.now();
   } catch (error) {
